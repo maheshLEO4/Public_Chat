@@ -1,6 +1,6 @@
 import streamlit as st
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams
+from qdrant_client.models import Distance, VectorParams, Filter, FieldCondition, MatchValue
 from config import get_qdrant_config
 
 def get_bot_collection_name(user_id, bot_id):
@@ -108,6 +108,142 @@ def get_vector_store(user_id, bot_id):
         
     except Exception as e:
         print(f"❌ Error initializing Qdrant: {e}")
+        return None
+
+def add_documents_to_bot(user_id, bot_id, documents):
+    """Add documents to bot's knowledge base"""
+    try:
+        vector_store = get_vector_store(user_id, bot_id)
+        if vector_store:
+            vector_store.add_documents(documents)
+            print(f"✅ Added {len(documents)} documents to bot {bot_id}")
+            return True
+        return False
+    except Exception as e:
+        print(f"❌ Error adding documents: {e}")
+        return False
+
+def clear_bot_knowledge(user_id, bot_id):
+    """Clear bot's entire knowledge base"""
+    try:
+        client = get_qdrant_client()
+        collection_name = get_bot_collection_name(user_id, bot_id)
+        client.delete_collection(collection_name=collection_name)
+        print(f"✅ Cleared knowledge base for bot {bot_id}")
+        return True
+    except Exception as e:
+        print(f"❌ Error clearing knowledge base: {e}")
+        return False
+
+def remove_documents_by_source(user_id, bot_id, source_type, source_id):
+    """Remove documents by source type and source ID"""
+    try:
+        client = get_qdrant_client()
+        collection_name = get_bot_collection_name(user_id, bot_id)
+        
+        # Delete points based on source metadata
+        client.delete(
+            collection_name=collection_name,
+            points_selector=Filter(
+                must=[
+                    FieldCondition(
+                        key="metadata.source_type",
+                        match=MatchValue(value=source_type)
+                    ),
+                    FieldCondition(
+                        key="metadata.source_id", 
+                        match=MatchValue(value=str(source_id))
+                    )
+                ]
+            )
+        )
+        print(f"✅ Removed documents for {source_type} source {source_id}")
+        return True
+    except Exception as e:
+        print(f"❌ Error removing documents by source: {e}")
+        return False
+
+def remove_documents_by_filename(user_id, bot_id, filename):
+    """Remove documents by filename"""
+    try:
+        client = get_qdrant_client()
+        collection_name = get_bot_collection_name(user_id, bot_id)
+        
+        client.delete(
+            collection_name=collection_name,
+            points_selector=Filter(
+                must=[
+                    FieldCondition(
+                        key="metadata.source",
+                        match=MatchValue(value=filename)
+                    )
+                ]
+            )
+        )
+        print(f"✅ Removed documents for filename: {filename}")
+        return True
+    except Exception as e:
+        print(f"❌ Error removing documents by filename: {e}")
+        return False
+
+def get_collection_info(user_id, bot_id):
+    """Get information about bot's collection"""
+    try:
+        client = get_qdrant_client()
+        collection_name = get_bot_collection_name(user_id, bot_id)
+        
+        collection_info = client.get_collection(collection_name=collection_name)
+        return {
+            'points_count': collection_info.points_count,
+            'vectors_count': collection_info.vectors_count,
+            'status': collection_info.status
+        }
+    except Exception as e:
+        print(f"❌ Error getting collection info: {e}")
+        return None
+
+def search_similar_documents(user_id, bot_id, query, k=4):
+    """Search for similar documents in bot's knowledge base"""
+    try:
+        vector_store = get_vector_store(user_id, bot_id)
+        if vector_store:
+            results = vector_store.similarity_search(query, k=k)
+            print(f"✅ Found {len(results)} similar documents")
+            return results
+        return []
+    except Exception as e:
+        print(f"❌ Error searching documents: {e}")
+        return []
+
+def check_collection_exists(user_id, bot_id):
+    """Check if collection exists for bot"""
+    try:
+        client = get_qdrant_client()
+        collection_name = get_bot_collection_name(user_id, bot_id)
+        client.get_collection(collection_name=collection_name)
+        return True
+    except Exception:
+        return False
+
+def get_collection_stats(user_id, bot_id):
+    """Get detailed statistics for bot's collection"""
+    try:
+        client = get_qdrant_client()
+        collection_name = get_bot_collection_name(user_id, bot_id)
+        
+        # Get collection info
+        collection_info = client.get_collection(collection_name=collection_name)
+        
+        stats = {
+            'total_points': collection_info.points_count,
+            'collection_status': collection_info.status,
+            'vectors_config': str(collection_info.config.params.vectors)
+        }
+        
+        print(f"✅ Retrieved stats for collection {collection_name}")
+        return stats
+    except Exception as e:
+        print(f"❌ Error getting collection stats: {e}")
         return None
 
 def create_fallback_response():

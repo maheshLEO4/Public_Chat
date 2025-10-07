@@ -1,23 +1,20 @@
 import streamlit as st
+import os
 from pymongo import MongoClient
 from datetime import datetime
-import os
 from dotenv import load_dotenv
-import requests
-import json
 
 # Load environment variables
 load_dotenv()
 
-# Configuration
-MONGODB_URI = os.getenv('MONGODB_URI')
-GROQ_API_KEY = os.getenv('GROQ_API_KEY')
-QDRANT_URL = os.getenv('QDRANT_URL')
-QDRANT_API_KEY = os.getenv('QDRANT_API_KEY')
+# Import from lib
+from lib.config import get_mongodb_uri
+from lib.ai.query_processor import process_bot_query
 
 # MongoDB connection
 def get_mongodb_client():
-    return MongoClient(MONGODB_URI)
+    mongodb_uri = get_mongodb_uri()
+    return MongoClient(mongodb_uri)
 
 def get_bot_config(bot_id):
     """Get bot configuration from MongoDB"""
@@ -43,101 +40,6 @@ def log_chat_session(bot_id, user_message, bot_response):
     except Exception as e:
         print(f"Error logging chat: {e}")
 
-def get_vector_search_results(bot_id, query):
-    """Search Qdrant for relevant documents"""
-    try:
-        # Search Qdrant vector database
-        response = requests.post(
-            f"{QDRANT_URL}/collections/chatbot_{bot_id}/points/search",
-            headers={"api-key": QDRANT_API_KEY},
-            json={
-                "vector": [0] * 384,  # Placeholder - you'd need proper embedding
-                "limit": 5,
-                "with_payload": True
-            }
-        )
-        if response.status_code == 200:
-            return response.json().get('result', [])
-        return []
-    except Exception as e:
-        print(f"Vector search error: {e}")
-        return []
-
-def generate_ai_response(query, context, bot_config):
-    """Generate AI response using Groq API"""
-    try:
-        system_prompt = bot_config.get('system_prompt', 'You are a helpful AI assistant.')
-        temperature = bot_config.get('temperature', 0.7)
-        
-        # Prepare context from vector search results
-        context_text = ""
-        if context:
-            context_text = "Relevant information:\n" + "\n".join([
-                f"- {item['payload'].get('text', '')[:200]}..." 
-                for item in context[:3]  # Use top 3 results
-            ])
-        
-        messages = [
-            {
-                "role": "system",
-                "content": f"{system_prompt}\n\n{context_text}\n\nInstructions: Use the provided context to answer the question. If the context doesn't contain relevant information, say you don't know based on your knowledge base."
-            },
-            {
-                "role": "user", 
-                "content": query
-            }
-        ]
-        
-        # Call Groq API
-        response = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "messages": messages,
-                "model": "llama-3.1-8b-instant",
-                "temperature": temperature,
-                "max_tokens": 1024,
-                "top_p": 1,
-                "stream": False
-            },
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            return response.json()['choices'][0]['message']['content']
-        else:
-            return "I apologize, but I'm having trouble generating a response right now. Please try again."
-            
-    except Exception as e:
-        print(f"AI response error: {e}")
-        return "I'm experiencing technical difficulties. Please try again in a moment."
-
-def process_user_query(bot_id, query, bot_config):
-    """Process user query with RAG pipeline"""
-    try:
-        # Step 1: Search vector database for relevant context
-        search_results = get_vector_search_results(bot_id, query)
-        
-        # Step 2: Generate AI response with context
-        response = generate_ai_response(query, search_results, bot_config)
-        
-        return {
-            'success': True,
-            'response': response,
-            'sources_used': len(search_results)
-        }
-        
-    except Exception as e:
-        print(f"Query processing error: {e}")
-        return {
-            'success': False,
-            'response': "Sorry, I encountered an error processing your question.",
-            'sources_used': 0
-        }
-
 def main():
     st.set_page_config(
         page_title="ChatBot",
@@ -161,7 +63,7 @@ def main():
     """, unsafe_allow_html=True)
     
     # Get bot_id from query parameters
-    query_params = st.experimental_get_query_params()
+    query_params = st.query_params
     bot_id = query_params.get("bot_id", [None])[0]
     
     if not bot_id:
@@ -229,29 +131,37 @@ def main():
         # Generate and display assistant response
         with st.chat_message("assistant"):
             with st.spinner("Searching knowledge base..."):
-                # Process the query
-                result = process_user_query(bot_id, prompt, bot_config)
+                # Process the query using your existing RAG system
+                result = process_bot_query(
+                    user_id=bot_config['user_id'],
+                    bot_id=bot_id,
+                    query=prompt,
+                    system_prompt=bot_config.get('system_prompt', ''),
+                    temperature=bot_config.get('temperature', 0.7)
+                )
                 
                 if result['success']:
                     # Display the response
-                    st.markdown(result['response'])
+                    st.markdown(result['answer'])
                     
-                    # Show sources info if available
-                    if result['sources_used'] > 0:
-                        st.caption(f"📚 Used {result['sources_used']} knowledge sources")
+                    # Show sources if available
+                    if result.get('sources'):
+                        with st.expander("📚 Sources"):
+                            for source in result['sources']:
+                                st.write(f"**{source['document']}** - Page {source['page']}")
                     
                     # Add to chat history
                     st.session_state.messages.append({
                         "role": "assistant", 
-                        "content": result['response']
+                        "content": result['answer']
                     })
                     
                     # Log the chat session
-                    log_chat_session(bot_id, prompt, result['response'])
+                    log_chat_session(bot_id, prompt, result['answer'])
                     
                 else:
                     # Error handling
-                    error_msg = "I apologize, but I'm having trouble accessing my knowledge base right now. Please try again in a moment."
+                    error_msg = result.get('error', 'Sorry, I encountered an error processing your question.')
                     st.error(error_msg)
                     st.session_state.messages.append({
                         "role": "assistant", 

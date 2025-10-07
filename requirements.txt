@@ -1,4 +1,9 @@
 streamlit>=1.28.0
 pymongo>=4.5.0
 python-dotenv>=1.0.0
+langchain>=0.0.346
+langchain-community>=0.0.10
+langchain-groq>=0.1.0
+qdrant-client>=1.6.0
 requests>=2.31.0
+# Removed: sentence-transformers, pypdf, beautifulsoup4, langchain-text-splitters

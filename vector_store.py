@@ -20,6 +20,48 @@ def get_qdrant_client():
         timeout=30
     )
 
+def check_sentence_transformers():
+    """Check if sentence-transformers is available"""
+    try:
+        import sentence_transformers
+        from sentence_transformers import SentenceTransformer
+        print("✅ sentence-transformers is properly installed")
+        return True
+    except ImportError as e:
+        print(f"❌ sentence-transformers import error: {e}")
+        return False
+
+def get_embedding_model():
+    """Get embedding model with fallback options"""
+    try:
+        # Try new import first
+        from langchain_huggingface import HuggingFaceEmbeddings
+        print("✅ Using langchain_huggingface embeddings")
+    except ImportError:
+        try:
+            # Fallback to community import
+            from langchain_community.embeddings import HuggingFaceEmbeddings
+            print("✅ Using langchain_community embeddings")
+        except ImportError as e:
+            print(f"❌ Could not import HuggingFaceEmbeddings: {e}")
+            return None
+    
+    try:
+        # Verify sentence-transformers is working
+        if not check_sentence_transformers():
+            return None
+            
+        embedding_model = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
+            model_kwargs={'device': 'cpu'},
+            encode_kwargs={'normalize_embeddings': True}
+        )
+        print("✅ Embedding model initialized successfully")
+        return embedding_model
+    except Exception as e:
+        print(f"❌ Error creating embedding model: {e}")
+        return None
+
 def get_vector_store(user_id, bot_id):
     """Get Qdrant vector store for specific bot"""
     collection_name = get_bot_collection_name(user_id, bot_id)
@@ -41,19 +83,19 @@ def get_vector_store(user_id, bot_id):
             print(f"❌ Error: {e}")
             return None
         
-        # Import here to avoid dependency issues
+        # Get embedding model
+        embedding_model = get_embedding_model()
+        if embedding_model is None:
+            print("❌ Failed to initialize embedding model")
+            return None
+        
+        # Import Qdrant vector store
         try:
             from langchain_qdrant import Qdrant
-            from langchain_huggingface import HuggingFaceEmbeddings
+            print("✅ Using langchain_qdrant")
         except ImportError:
             from langchain_community.vectorstores import Qdrant
-            from langchain_community.embeddings import HuggingFaceEmbeddings
-        
-        embedding_model = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
-            model_kwargs={'device': 'cpu'},
-            encode_kwargs={'normalize_embeddings': True}
-        )
+            print("✅ Using langchain_community Qdrant")
         
         vector_store = Qdrant(
             client=client,
@@ -67,3 +109,7 @@ def get_vector_store(user_id, bot_id):
     except Exception as e:
         print(f"❌ Error initializing Qdrant: {e}")
         return None
+
+def create_fallback_response():
+    """Create a fallback response when vector store fails"""
+    return "I'm here to help! However, my knowledge base is currently unavailable. Please try again later or contact support."

@@ -1,10 +1,17 @@
 streamlit>=1.28.0
 pymongo>=4.5.0
 python-dotenv>=1.0.0
-langchain>=0.0.346
-langchain-community>=0.0.10
+langchain>=0.1.0
+langchain-community>=0.0.20
 langchain-groq>=0.1.0
 qdrant-client>=1.6.0
 requests>=2.31.0
-sentence-transformers>=2.2.2 
-# Removed: sentence-transformers, pypdf, beautifulsoup4, langchain-text-splitters
+sentence-transformers>=2.2.2
+torch>=2.0.0
+transformers>=4.30.0
+numpy>=1.24.0
+scikit-learn>=1.2.0
+tqdm>=4.65.0
+huggingface-hub>=0.16.0
+langchain-qdrant>=0.1.0
+langchain-huggingface>=0.1.0

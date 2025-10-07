@@ -39,36 +39,15 @@ def get_bot_config(bot_id):
         db = client.chatbot_builder
         print(f"🔍 Searching for bot_id: {bot_id}")
         
-        # Check if collection exists
-        collections = db.list_collection_names()
-        print(f"📂 Available collections: {collections}")
-        
-        if 'chatbots' not in collections:
-            print("❌ 'chatbots' collection not found")
-            client.close()
-            return None
-        
-        # Count total bots for debugging
-        total_bots = db.chatbots.count_documents({})
-        print(f"📊 Total bots in database: {total_bots}")
-        
-        # Get all bot IDs for debugging
-        all_bots = list(db.chatbots.find({}, {'bot_id': 1, 'name': 1}))
-        print(f"🔍 All bots in database: {[bot['bot_id'] for bot in all_bots]}")
-        
         # Get the specific bot
         bot_config = db.chatbots.find_one({'bot_id': bot_id})
         print(f"✅ Bot found: {bot_config is not None}")
-        
-        if bot_config:
-            print(f"✅ Bot details: {bot_config.get('name')} (ID: {bot_config.get('bot_id')})")
         
         client.close()
         return bot_config
         
     except Exception as e:
         print(f"❌ Error getting bot config: {e}")
-        st.error(f"Database error: {str(e)}")
         return None
 
 def log_chat_session(bot_id, user_message, bot_response):
@@ -95,16 +74,15 @@ def main():
         layout="centered"
     )
     
-    # Debug: Show all query parameters
+    # ✅ FIXED: Proper query parameter extraction
     query_params = st.query_params
-    st.write(f"🔍 All query parameters: {dict(query_params)}")
+    bot_id = query_params.get("bot_id", "")
     
-    # Get bot_id from query parameters - FIXED
-    bot_id = query_params.get("bot_id", [""])[0]
+    # If it's a list, take the first element, otherwise use the string directly
+    if isinstance(bot_id, list):
+        bot_id = bot_id[0] if bot_id else ""
     
-    st.write(f"🔍 Extracted bot_id: '{bot_id}'")
-    st.write(f"🔍 Type of bot_id: {type(bot_id)}")
-    st.write(f"🔍 Length of bot_id: {len(bot_id)}")
+    st.info(f"🔄 Loading chatbot with ID: `{bot_id}`")
     
     if not bot_id:
         st.error("""
@@ -114,8 +92,6 @@ def main():
         Example: https://public-chat-app.streamlit.app/?bot_id=572eb353
         """)
         st.stop()
-    
-    st.info(f"🔄 Loading chatbot with ID: `{bot_id}`")
     
     # Test MongoDB connection first
     with st.spinner("Connecting to database..."):
@@ -143,10 +119,10 @@ def main():
         
         The chatbot with ID `{bot_id}` was not found in the database.
         
-        **Debug Information:**
-        - URL parameter received: `{bot_id}`
-        - Expected bot ID: `572eb353`
-        - Check if the URL is correct
+        **Please check:**
+        - The bot ID is correct: `{bot_id}`
+        - The bot exists in your builder app
+        - The bot is active
         
         **Try this exact URL:** https://public-chat-app.streamlit.app/?bot_id=572eb353
         """)

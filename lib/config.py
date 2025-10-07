@@ -37,13 +37,18 @@ def get_qdrant_config():
     """
     Get Qdrant Cloud configuration
     """
+    api_key = get_api_key('QDRANT_API_KEY')
+    url = get_api_key('QDRANT_URL')
+    print(f"Qdrant Config - URL: {url}, API Key: {api_key[:20]}...")  # Debug
     return {
-        'api_key': get_api_key('QDRANT_API_KEY'),
-        'url': get_api_key('QDRANT_URL')
+        'api_key': api_key,
+        'url': url
     }
 
 def get_mongodb_uri():
     """
     Get MongoDB connection URI
     """
-    return get_api_key('MONGODB_URI')
+    uri = get_api_key('MONGODB_URI')
+    print(f"MongoDB URI: {uri[:50]}...")  # Debug
+    return uri

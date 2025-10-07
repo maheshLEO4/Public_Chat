@@ -14,13 +14,30 @@ from lib.ai.query_processor import process_bot_query
 # MongoDB connection
 def get_mongodb_client():
     mongodb_uri = get_mongodb_uri()
+    print(f"Connecting to MongoDB with URI: {mongodb_uri[:50]}...")  # Debug
     return MongoClient(mongodb_uri)
 
 def get_bot_config(bot_id):
     """Get bot configuration from MongoDB"""
+    print(f"Looking for bot_id: {bot_id}")  # Debug
     client = get_mongodb_client()
     db = client.chatbot_builder
+    
+    # List all collections for debugging
+    collections = db.list_collection_names()
+    print(f"Available collections: {collections}")  # Debug
+    
+    # Check if chatbots collection exists and has data
+    if 'chatbots' in collections:
+        bot_count = db.chatbots.count_documents({})
+        print(f"Total bots in database: {bot_count}")  # Debug
+        
+        # Get all bot IDs for debugging
+        all_bots = list(db.chatbots.find({}, {'bot_id': 1, 'name': 1}))
+        print(f"All bots: {[(bot.get('bot_id'), bot.get('name')) for bot in all_bots]}")  # Debug
+    
     bot_config = db.chatbots.find_one({'bot_id': bot_id})
+    print(f"Found bot config: {bot_config is not None}")  # Debug
     client.close()
     return bot_config
 
@@ -66,6 +83,8 @@ def main():
     query_params = st.query_params
     bot_id = query_params.get("bot_id", [None])[0]
     
+    st.write(f"Debug: Received bot_id = {bot_id}")  # Debug
+    
     if not bot_id:
         st.error("""
         ## No chatbot specified! 
@@ -86,6 +105,10 @@ def main():
         
         The chatbot you're trying to access doesn't exist or has been removed.
         Please check the URL or contact the bot creator.
+        
+        **Debug Info:**
+        - Bot ID: {bot_id}
+        - Make sure this bot exists in your builder app
         """)
         st.stop()
     

@@ -8,8 +8,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Import from lib
-from lib.config import get_mongodb_uri
-from lib.ai.query_processor import process_bot_query
+from config import get_mongodb_uri
+from query_processor import process_bot_query
 
 # MongoDB connection with proper error handling
 def get_mongodb_client():

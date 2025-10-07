@@ -6,4 +6,5 @@ langchain-community>=0.0.10
 langchain-groq>=0.1.0
 qdrant-client>=1.6.0
 requests>=2.31.0
+sentence-transformers>=2.2.2 
 # Removed: sentence-transformers, pypdf, beautifulsoup4, langchain-text-splitters

@@ -1,7 +1,7 @@
 import streamlit as st
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
-from lib.config import get_qdrant_config
+from config import get_qdrant_config
 
 def get_bot_collection_name(user_id, bot_id):
     """Get bot-specific Qdrant collection name"""

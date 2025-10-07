@@ -3,8 +3,8 @@ import streamlit as st
 from langchain.prompts import PromptTemplate
 from langchain_groq import ChatGroq
 from langchain.chains import RetrievalQA
-from lib.vector_store import get_vector_store
-from lib.config import validate_api_key
+from vector_store import get_vector_store
+from config import validate_api_key
 
 @st.cache_resource(show_spinner=False)
 def get_cached_qa_chain(groq_api_key, user_id, bot_id, system_prompt, temperature):

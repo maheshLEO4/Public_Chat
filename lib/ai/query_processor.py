@@ -10,10 +10,15 @@ from lib.config import validate_api_key
 def get_cached_qa_chain(groq_api_key, user_id, bot_id, system_prompt, temperature):
     """Cached QA chain - only loads once per user session"""
     try:
+        print(f"🔍 Creating QA chain for user: {user_id}, bot: {bot_id}")
         db = get_vector_store(user_id, bot_id)
+        
         if db is None:
+            print("❌ Vector store is None - knowledge base not found")
             return None
 
+        print("✅ Vector store loaded successfully")
+        
         # Simple, effective prompt
         CUSTOM_PROMPT_TEMPLATE = f"""
         {system_prompt}
@@ -52,10 +57,12 @@ def get_cached_qa_chain(groq_api_key, user_id, bot_id, system_prompt, temperatur
             return_source_documents=True,
             chain_type_kwargs={'prompt': prompt}
         )
+        
+        print("✅ QA chain created successfully")
         return qa_chain
         
     except Exception as e:
-        print(f"Error creating QA chain: {e}")
+        print(f"❌ Error creating QA chain: {e}")
         return None
 
 def format_source_documents(source_documents):
@@ -99,21 +106,32 @@ def format_source_documents(source_documents):
 def process_bot_query(user_id, bot_id, query, system_prompt, temperature):
     """Process user query and return answer with sources."""
     try:
+        print(f"🔍 Processing query for user: {user_id}, bot: {bot_id}")
+        print(f"🔍 Query: {query}")
+        
         groq_api_key = validate_api_key()
+        print("✅ Groq API key validated")
         
         # Get cached chain
         qa_chain = get_cached_qa_chain(groq_api_key, user_id, bot_id, system_prompt, temperature)
         
         if not qa_chain:
+            print("❌ QA chain is None - returning knowledge base error")
             return {
                 'success': False,
                 'error': "Knowledge base not ready. Please add documents first."
             }
         
+        print("✅ QA chain loaded - processing query...")
+        
         # Process query
         response = qa_chain.invoke({'query': query})
         answer = response.get("result", "No answer generated.")
         source_documents = response.get("source_documents", [])
+        
+        print(f"✅ Query processed successfully")
+        print(f"✅ Answer length: {len(answer)} characters")
+        print(f"✅ Sources found: {len(source_documents)}")
         
         # Format sources
         formatted_sources = format_source_documents(source_documents)
@@ -135,7 +153,7 @@ def process_bot_query(user_id, bot_id, query, system_prompt, temperature):
         elif "api key" in str(e).lower():
             error_msg = "API configuration issue. Please check your settings."
             
-        print(f"Query processing error: {e}")
+        print(f"❌ Query processing error: {e}")
         return {
             'success': False,
             'error': error_msg

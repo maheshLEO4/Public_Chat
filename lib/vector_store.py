@@ -5,12 +5,15 @@ from lib.config import get_qdrant_config
 
 def get_bot_collection_name(user_id, bot_id):
     """Get bot-specific Qdrant collection name"""
-    return f"chatbot_{user_id}_{bot_id}"
+    collection_name = f"chatbot_{user_id}_{bot_id}"
+    print(f"🔍 Qdrant collection name: {collection_name}")
+    return collection_name
 
 @st.cache_resource
 def get_qdrant_client():
     """Cached Qdrant client"""
     qdrant_config = get_qdrant_config()
+    print(f"🔍 Qdrant config: URL={qdrant_config['url']}, API Key length={len(qdrant_config['api_key'])}")
     return QdrantClient(
         url=qdrant_config['url'],
         api_key=qdrant_config['api_key'],
@@ -28,14 +31,15 @@ def get_vector_store(user_id, bot_id):
     try:
         client = get_qdrant_client()
         
-        # Create collection if it doesn't exist
+        # Check if collection exists
         try:
-            client.get_collection(collection_name=collection_name)
-        except Exception:
-            client.create_collection(
-                collection_name=collection_name,
-                vectors_config=VectorParams(size=384, distance=Distance.COSINE)
-            )
+            collection_info = client.get_collection(collection_name=collection_name)
+            print(f"✅ Qdrant collection exists: {collection_name}")
+            print(f"📊 Collection points: {collection_info.points_count}")
+        except Exception as e:
+            print(f"❌ Qdrant collection not found: {collection_name}")
+            print(f"❌ Error: {e}")
+            return None
         
         # Import here to avoid dependency issues
         try:
@@ -57,7 +61,9 @@ def get_vector_store(user_id, bot_id):
             embeddings=embedding_model
         )
         
+        print(f"✅ Vector store created successfully for {collection_name}")
         return vector_store
+        
     except Exception as e:
-        print(f"Error initializing Qdrant: {e}")
-        raise
+        print(f"❌ Error initializing Qdrant: {e}")
+        return None

@@ -50,5 +50,8 @@ def get_mongodb_uri():
     Get MongoDB connection URI
     """
     uri = get_api_key('MONGODB_URI')
-    print(f"MongoDB URI: {uri[:50]}...")  # Debug
+    if not uri:
+        print("❌ MONGODB_URI not found in environment variables")
+    else:
+        print(f"✅ MongoDB URI found: {uri[:50]}...")
     return uri

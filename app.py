@@ -11,49 +11,73 @@ load_dotenv()
 from lib.config import get_mongodb_uri
 from lib.ai.query_processor import process_bot_query
 
-# MongoDB connection
+# MongoDB connection with proper error handling
 def get_mongodb_client():
-    mongodb_uri = get_mongodb_uri()
-    print(f"Connecting to MongoDB with URI: {mongodb_uri[:50]}...")  # Debug
-    return MongoClient(mongodb_uri)
+    try:
+        mongodb_uri = get_mongodb_uri()
+        if not mongodb_uri:
+            st.error("MongoDB URI not found. Please check your environment variables.")
+            return None
+        
+        client = MongoClient(mongodb_uri, serverSelectionTimeoutMS=5000)
+        # Test connection
+        client.admin.command('ping')
+        print("✅ MongoDB connection successful")
+        return client
+    except Exception as e:
+        print(f"❌ MongoDB connection failed: {e}")
+        st.error(f"MongoDB connection failed: {str(e)}")
+        return None
 
 def get_bot_config(bot_id):
     """Get bot configuration from MongoDB"""
-    print(f"Looking for bot_id: {bot_id}")  # Debug
-    client = get_mongodb_client()
-    db = client.chatbot_builder
-    
-    # List all collections for debugging
-    collections = db.list_collection_names()
-    print(f"Available collections: {collections}")  # Debug
-    
-    # Check if chatbots collection exists and has data
-    if 'chatbots' in collections:
-        bot_count = db.chatbots.count_documents({})
-        print(f"Total bots in database: {bot_count}")  # Debug
+    try:
+        client = get_mongodb_client()
+        if not client:
+            return None
+            
+        db = client.chatbot_builder
+        print(f"🔍 Searching for bot_id: {bot_id}")
         
-        # Get all bot IDs for debugging
-        all_bots = list(db.chatbots.find({}, {'bot_id': 1, 'name': 1}))
-        print(f"All bots: {[(bot.get('bot_id'), bot.get('name')) for bot in all_bots]}")  # Debug
-    
-    bot_config = db.chatbots.find_one({'bot_id': bot_id})
-    print(f"Found bot config: {bot_config is not None}")  # Debug
-    client.close()
-    return bot_config
+        # Check if collection exists
+        collections = db.list_collection_names()
+        print(f"📂 Available collections: {collections}")
+        
+        if 'chatbots' not in collections:
+            print("❌ 'chatbots' collection not found")
+            client.close()
+            return None
+        
+        # Count total bots for debugging
+        total_bots = db.chatbots.count_documents({})
+        print(f"📊 Total bots in database: {total_bots}")
+        
+        # Get the specific bot
+        bot_config = db.chatbots.find_one({'bot_id': bot_id})
+        print(f"✅ Bot found: {bot_config is not None}")
+        
+        client.close()
+        return bot_config
+        
+    except Exception as e:
+        print(f"❌ Error getting bot config: {e}")
+        st.error(f"Database error: {str(e)}")
+        return None
 
 def log_chat_session(bot_id, user_message, bot_response):
     """Log chat session to database"""
     try:
         client = get_mongodb_client()
-        db = client.chatbot_builder
-        db.chat_sessions.insert_one({
-            'bot_id': bot_id,
-            'user_message': user_message,
-            'bot_response': bot_response,
-            'timestamp': datetime.utcnow(),
-            'source': 'public_chat'
-        })
-        client.close()
+        if client:
+            db = client.chatbot_builder
+            db.chat_sessions.insert_one({
+                'bot_id': bot_id,
+                'user_message': user_message,
+                'bot_response': bot_response,
+                'timestamp': datetime.utcnow(),
+                'source': 'public_chat'
+            })
+            client.close()
     except Exception as e:
         print(f"Error logging chat: {e}")
 
@@ -64,51 +88,53 @@ def main():
         layout="centered"
     )
     
-    # Custom CSS for better styling
-    st.markdown("""
-    <style>
-    .chat-container {
-        max-width: 800px;
-        margin: 0 auto;
-    }
-    .stChatMessage {
-        padding: 12px;
-        border-radius: 15px;
-        margin: 8px 0;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
     # Get bot_id from query parameters
     query_params = st.query_params
     bot_id = query_params.get("bot_id", [None])[0]
-    
-    st.write(f"Debug: Received bot_id = {bot_id}")  # Debug
     
     if not bot_id:
         st.error("""
         ## No chatbot specified! 
         
         Please use a valid chat URL provided by the bot creator.
-        
-        If you're looking to create your own chatbot, visit our builder app.
+        Example: https://public-chat-app.streamlit.app/?bot_id=572eb353
         """)
         st.stop()
     
+    st.info(f"🔄 Loading chatbot with ID: `{bot_id}`")
+    
+    # Test MongoDB connection first
+    with st.spinner("Connecting to database..."):
+        client = get_mongodb_client()
+        if not client:
+            st.error("""
+            ## Database Connection Failed
+            
+            Cannot connect to MongoDB. Please check:
+            - MongoDB URI in environment variables
+            - Network connectivity
+            - Database permissions
+            """)
+            st.stop()
+        else:
+            client.close()
+    
     # Get bot configuration
-    with st.spinner("Loading chatbot..."):
+    with st.spinner("Loading chatbot configuration..."):
         bot_config = get_bot_config(bot_id)
     
     if not bot_config:
-        st.error("""
+        st.error(f"""
         ## Chatbot Not Found
         
-        The chatbot you're trying to access doesn't exist or has been removed.
-        Please check the URL or contact the bot creator.
+        The chatbot with ID `{bot_id}` was not found in the database.
         
-        **Debug Info:**
-        - Bot ID: {bot_id}
-        - Make sure this bot exists in your builder app
+        **Possible reasons:**
+        - The bot ID is incorrect
+        - The bot was deleted
+        - Database connection issue
+        
+        **Try this working bot ID:** `572eb353`
         """)
         st.stop()
     
@@ -128,6 +154,7 @@ def main():
     if bot_config.get('description'):
         st.write(bot_config['description'])
     
+    st.success("✅ Chatbot loaded successfully!")
     st.caption("Ask me anything about my knowledge base!")
     
     # Initialize chat history in session state

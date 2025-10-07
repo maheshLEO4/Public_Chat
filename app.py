@@ -52,9 +52,16 @@ def get_bot_config(bot_id):
         total_bots = db.chatbots.count_documents({})
         print(f"📊 Total bots in database: {total_bots}")
         
+        # Get all bot IDs for debugging
+        all_bots = list(db.chatbots.find({}, {'bot_id': 1, 'name': 1}))
+        print(f"🔍 All bots in database: {[bot['bot_id'] for bot in all_bots]}")
+        
         # Get the specific bot
         bot_config = db.chatbots.find_one({'bot_id': bot_id})
         print(f"✅ Bot found: {bot_config is not None}")
+        
+        if bot_config:
+            print(f"✅ Bot details: {bot_config.get('name')} (ID: {bot_config.get('bot_id')})")
         
         client.close()
         return bot_config
@@ -88,15 +95,22 @@ def main():
         layout="centered"
     )
     
-    # Get bot_id from query parameters
+    # Debug: Show all query parameters
     query_params = st.query_params
-    bot_id = query_params.get("bot_id", [None])[0]
+    st.write(f"🔍 All query parameters: {dict(query_params)}")
+    
+    # Get bot_id from query parameters - FIXED
+    bot_id = query_params.get("bot_id", [""])[0]
+    
+    st.write(f"🔍 Extracted bot_id: '{bot_id}'")
+    st.write(f"🔍 Type of bot_id: {type(bot_id)}")
+    st.write(f"🔍 Length of bot_id: {len(bot_id)}")
     
     if not bot_id:
         st.error("""
         ## No chatbot specified! 
         
-        Please use a valid chat URL provided by the bot creator.
+        Please use a valid chat URL with ?bot_id= parameter.
         Example: https://public-chat-app.streamlit.app/?bot_id=572eb353
         """)
         st.stop()
@@ -129,12 +143,12 @@ def main():
         
         The chatbot with ID `{bot_id}` was not found in the database.
         
-        **Possible reasons:**
-        - The bot ID is incorrect
-        - The bot was deleted
-        - Database connection issue
+        **Debug Information:**
+        - URL parameter received: `{bot_id}`
+        - Expected bot ID: `572eb353`
+        - Check if the URL is correct
         
-        **Try this working bot ID:** `572eb353`
+        **Try this exact URL:** https://public-chat-app.streamlit.app/?bot_id=572eb353
         """)
         st.stop()
     
